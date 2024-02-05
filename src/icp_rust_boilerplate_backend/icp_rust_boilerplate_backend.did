@@ -1,0 +1,28 @@
+type Error = variant { NotFound : record { msg : text } };
+type Fragrance = record {
+  id : nat64;
+  updated_at : opt nat64;
+  name : text;
+  description : text;
+  created_at : nat64;
+  mood_enhancing_properties : vec text;
+};
+type FragrancePayload = record {
+  name : text;
+  description : text;
+  mood_enhancing_properties : vec text;
+};
+type Result = variant { Ok : Fragrance; Err : Error };
+type Result_1 = variant { Ok : vec Fragrance; Err : Error };
+type Result_2 = variant { Ok : vec text; Err : Error };
+service : {
+  add_fragrance : (FragrancePayload) -> (opt Fragrance);
+  delete_fragrance : (nat64) -> (Result);
+  filter_fragrances_by_mood : (text) -> (Result_1) query;
+  get_fragrance : (nat64) -> (Result) query;
+  get_recommendations : (text) -> (Result_1) query;
+  list_fragrances : () -> (vec Fragrance) query;
+  search_fragrance_names : (text) -> (Result_2) query;
+  sort_fragrances_by_creation_date : () -> (vec Fragrance) query;
+  update_fragrance : (nat64, FragrancePayload) -> (Result);
+}
