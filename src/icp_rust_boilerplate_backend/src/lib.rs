@@ -73,13 +73,23 @@ fn get_fragrance(id: u64) -> Result<Fragrance, Error> {
 
 #[ic_cdk::update]
 fn add_fragrance(fragrance: FragrancePayload) -> Option<Fragrance> {
+    // Validate input
+    if fragrance.name.is_empty() || fragrance.description.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Empty fields are not allowed.".to_string(),
+        });
+    }
+
     // Increment ID counter and create a new Fragrance instance
     let id = ID_COUNTER
         .with(|counter| {
             let current_value = *counter.borrow().get();
-            counter.borrow_mut().set(current_value + 1)
+            counter.borrow_mut().set(current_value +  1)
         })
-        .expect("cannot increment id counter");
+        .map_err(|_| Error::Internal {
+            msg: "Cannot increment id counter".to_string(),
+        })?;
+    
     let new_fragrance = Fragrance {
         id,
         name: fragrance.name,
@@ -96,6 +106,13 @@ fn add_fragrance(fragrance: FragrancePayload) -> Option<Fragrance> {
 
 #[ic_cdk::update]
 fn update_fragrance(id: u64, payload: FragrancePayload) -> Result<Fragrance, Error> {
+    // Validate input
+    if payload.name.is_empty() || payload.description.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Empty fields are not allowed.".to_string(),
+        });
+    }
+
     // Update an existing fragrance with new data
     match FRAGRANCE_STORAGE.with(|service| service.borrow().get(&id)) {
         Some(mut fragrance) => {
@@ -160,6 +177,13 @@ fn list_fragrances() -> Vec<Fragrance> {
 
 #[ic_cdk::query]
 fn search_fragrance_names(keyword: String) -> Result<Vec<String>, Error> {
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
+    }
+
     // Search for fragrances by name or description and return their names
     let matching_names: Vec<String> = FRAGRANCE_STORAGE.with(|service| {
         service
@@ -184,6 +208,13 @@ fn search_fragrance_names(keyword: String) -> Result<Vec<String>, Error> {
 
 #[ic_cdk::query]
 fn get_recommendations(mood_keyword: String) -> Result<Vec<Fragrance>, Error> {
+    // Validate keyword
+    if mood_keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Mood Keyword cannot be empty".to_string(),
+        });
+    }
+    
     let matching_fragrances: Vec<Fragrance> = FRAGRANCE_STORAGE.with(|service| {
         service
             .borrow()
@@ -210,6 +241,13 @@ fn get_recommendations(mood_keyword: String) -> Result<Vec<Fragrance>, Error> {
 
 #[ic_cdk::query]
 fn filter_fragrances_by_mood(keyword: String) -> Result<Vec<Fragrance>, Error> {
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
+    }
+    
     // Filter fragrances by mood-enhancing properties
     let matching_fragrances: Vec<Fragrance> = FRAGRANCE_STORAGE.with(|service| {
         service
