@@ -184,26 +184,9 @@ fn search_fragrance_names(keyword: String) -> Result<Vec<String>, Error> {
         });
     }
 
-    // Search for fragrances by name or description and return their names
-    let matching_names: Vec<String> = FRAGRANCE_STORAGE.with(|service| {
-        service
-            .borrow()
-            .iter()
-            .filter(|(_, fragrance)| {
-                fragrance.name.contains(&keyword) || fragrance.description.contains(&keyword)
-            })
-            .map(|(_, fragrance)| fragrance.name.clone())
-            .collect()
-    });
-
-    // Return the result or an error message if no matches are found
-    if matching_names.is_empty() {
-        Err(Error::NotFound {
-            msg: format!("No fragrances found with the keyword '{}'", keyword),
-        })
-    } else {
-        Ok(matching_names)
-    }
+    search_or_filter_fragrances(keyword, |fragrance| {
+        fragrance.name.contains(&keyword) || fragrance.description.contains(&keyword)
+    })
 }
 
 #[ic_cdk::query]
@@ -248,17 +231,30 @@ fn filter_fragrances_by_mood(keyword: String) -> Result<Vec<Fragrance>, Error> {
         });
     }
     
-    // Filter fragrances by mood-enhancing properties
+    search_or_filter_fragrances(keyword, |fragrance| {
+        fragrance
+            .mood_enhancing_properties
+            .iter()
+            .any(|prop| prop.contains(&keyword))
+    })
+}
+
+fn search_or_filter_fragrances<F>(keyword: String, filter: F) -> Result<Vec<Fragrance>, Error>
+where
+    F: Fn(&Fragrance) -> bool,
+{
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
+    }
+    
     let matching_fragrances: Vec<Fragrance> = FRAGRANCE_STORAGE.with(|service| {
         service
             .borrow()
             .iter()
-            .filter(|(_, fragrance)| {
-                fragrance
-                    .mood_enhancing_properties
-                    .iter()
-                    .any(|prop| prop.contains(&keyword))
-            })
+            .filter(move |(_, fragrance)| filter(fragrance))
             .map(|(_, fragrance)| fragrance.clone())
             .collect()
     });
@@ -266,7 +262,7 @@ fn filter_fragrances_by_mood(keyword: String) -> Result<Vec<Fragrance>, Error> {
     // Return the result or an error message if no matches are found
     if matching_fragrances.is_empty() {
         Err(Error::NotFound {
-            msg: format!("No fragrances found with mood-enhancing properties related to '{}'", keyword),
+            msg: format!("No fragrances found with the keyword '{}'", keyword),
         })
     } else {
         Ok(matching_fragrances)
