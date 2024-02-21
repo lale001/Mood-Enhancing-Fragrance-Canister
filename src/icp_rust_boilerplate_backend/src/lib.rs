@@ -73,13 +73,23 @@ fn get_fragrance(id: u64) -> Result<Fragrance, Error> {
 
 #[ic_cdk::update]
 fn add_fragrance(fragrance: FragrancePayload) -> Option<Fragrance> {
+    // Validate input
+    if fragrance.name.is_empty() || fragrance.description.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Empty fields are not allowed.".to_string(),
+        });
+    }
+
     // Increment ID counter and create a new Fragrance instance
     let id = ID_COUNTER
         .with(|counter| {
             let current_value = *counter.borrow().get();
-            counter.borrow_mut().set(current_value + 1)
+            counter.borrow_mut().set(current_value +  1)
         })
-        .expect("cannot increment id counter");
+        .map_err(|_| Error::Internal {
+            msg: "Cannot increment id counter".to_string(),
+        })?;
+    
     let new_fragrance = Fragrance {
         id,
         name: fragrance.name,
@@ -96,6 +106,13 @@ fn add_fragrance(fragrance: FragrancePayload) -> Option<Fragrance> {
 
 #[ic_cdk::update]
 fn update_fragrance(id: u64, payload: FragrancePayload) -> Result<Fragrance, Error> {
+    // Validate input
+    if payload.name.is_empty() || payload.description.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Empty fields are not allowed.".to_string(),
+        });
+    }
+
     // Update an existing fragrance with new data
     match FRAGRANCE_STORAGE.with(|service| service.borrow().get(&id)) {
         Some(mut fragrance) => {
@@ -160,30 +177,27 @@ fn list_fragrances() -> Vec<Fragrance> {
 
 #[ic_cdk::query]
 fn search_fragrance_names(keyword: String) -> Result<Vec<String>, Error> {
-    // Search for fragrances by name or description and return their names
-    let matching_names: Vec<String> = FRAGRANCE_STORAGE.with(|service| {
-        service
-            .borrow()
-            .iter()
-            .filter(|(_, fragrance)| {
-                fragrance.name.contains(&keyword) || fragrance.description.contains(&keyword)
-            })
-            .map(|(_, fragrance)| fragrance.name.clone())
-            .collect()
-    });
-
-    // Return the result or an error message if no matches are found
-    if matching_names.is_empty() {
-        Err(Error::NotFound {
-            msg: format!("No fragrances found with the keyword '{}'", keyword),
-        })
-    } else {
-        Ok(matching_names)
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
     }
+
+    search_or_filter_fragrances(keyword, |fragrance| {
+        fragrance.name.contains(&keyword) || fragrance.description.contains(&keyword)
+    })
 }
 
 #[ic_cdk::query]
 fn get_recommendations(mood_keyword: String) -> Result<Vec<Fragrance>, Error> {
+    // Validate keyword
+    if mood_keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Mood Keyword cannot be empty".to_string(),
+        });
+    }
+    
     let matching_fragrances: Vec<Fragrance> = FRAGRANCE_STORAGE.with(|service| {
         service
             .borrow()
@@ -210,17 +224,37 @@ fn get_recommendations(mood_keyword: String) -> Result<Vec<Fragrance>, Error> {
 
 #[ic_cdk::query]
 fn filter_fragrances_by_mood(keyword: String) -> Result<Vec<Fragrance>, Error> {
-    // Filter fragrances by mood-enhancing properties
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
+    }
+    
+    search_or_filter_fragrances(keyword, |fragrance| {
+        fragrance
+            .mood_enhancing_properties
+            .iter()
+            .any(|prop| prop.contains(&keyword))
+    })
+}
+
+fn search_or_filter_fragrances<F>(keyword: String, filter: F) -> Result<Vec<Fragrance>, Error>
+where
+    F: Fn(&Fragrance) -> bool,
+{
+    // Validate keyword
+    if keyword.is_empty() {
+        return Err(Error::InvalidInput {
+            msg: "Keyword cannot be empty".to_string(),
+        });
+    }
+    
     let matching_fragrances: Vec<Fragrance> = FRAGRANCE_STORAGE.with(|service| {
         service
             .borrow()
             .iter()
-            .filter(|(_, fragrance)| {
-                fragrance
-                    .mood_enhancing_properties
-                    .iter()
-                    .any(|prop| prop.contains(&keyword))
-            })
+            .filter(move |(_, fragrance)| filter(fragrance))
             .map(|(_, fragrance)| fragrance.clone())
             .collect()
     });
@@ -228,7 +262,7 @@ fn filter_fragrances_by_mood(keyword: String) -> Result<Vec<Fragrance>, Error> {
     // Return the result or an error message if no matches are found
     if matching_fragrances.is_empty() {
         Err(Error::NotFound {
-            msg: format!("No fragrances found with mood-enhancing properties related to '{}'", keyword),
+            msg: format!("No fragrances found with the keyword '{}'", keyword),
         })
     } else {
         Ok(matching_fragrances)
